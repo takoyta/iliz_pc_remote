@@ -107,7 +107,7 @@ static BOOL Begin(HttpJob *job, const wchar_t *url, const wchar_t *method, int t
     if (!SplitUrl(url, parts))
         return FALSE;
     HttpJobInit(job);
-    *ses = WinHttpOpen(L"iliz_pcrc/" APP_VERSION, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+    *ses = WinHttpOpen(L"iliz_pc_remote/" APP_VERSION, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!*ses)
         return FALSE;

@@ -13,6 +13,7 @@
 #include "text.h"
 #include "ui.h"
 #include "ui_internal.h"
+#include "update.h"
 
 #define WND_CLASS      L"IlizPcrc"
 #define SETTINGS_CLASS L"IlizPcrcSettings"
@@ -25,6 +26,8 @@
 #define IDM_OPEN_CFG  1004
 #define IDM_OPEN_PAGE 1005
 #define IDM_TELEGRAM  1006
+#define IDM_UPDATE    1007
+#define IDM_CHECK_UPD 1008
 
 #define IDC_PAGE0      2301
 #define IDC_PAGE1      2302
@@ -1248,6 +1251,17 @@ static void ShowSettings(void)
     SetForegroundWindow(g_ui_settings);
 }
 
+// Tray balloon (used for "update available").
+void UiNotify(const wchar_t *title, const wchar_t *text)
+{
+    NOTIFYICONDATAW n = g_nid;
+    n.uFlags = NIF_INFO;
+    n.dwInfoFlags = NIIF_INFO;
+    CopyW(n.szInfoTitle, title, 64);
+    CopyW(n.szInfo, text, 256);
+    Shell_NotifyIconW(NIM_MODIFY, &n);
+}
+
 static void ShowTrayMenu(void)
 {
     POINT pt;
@@ -1260,6 +1274,15 @@ static void ShowTrayMenu(void)
     AppendMenuW(menu, MF_STRING, IDM_SETTINGS, L"Settings");
     AppendMenuW(menu, MF_STRING, IDM_OPEN_CFG, L"Open config.json");
     AppendMenuW(menu, MF_SEPARATOR, 0, 0);
+    if (UpdateAvailable()) {
+        if (UpdateLatest()[0]) {
+            wchar_t upd[96];
+            CopyW(upd, L"Update to ", 96);
+            AppendW(upd, 96, UpdateLatest());
+            AppendMenuW(menu, MF_STRING, IDM_UPDATE, upd);
+        }
+        AppendMenuW(menu, MF_STRING, IDM_CHECK_UPD, L"Check for updates");
+    }
     AppendMenuW(menu, MF_STRING, IDM_ABOUT, L"About");
     AppendMenuW(menu, MF_STRING, IDM_EXIT, L"Exit");
     SetForegroundWindow(g_ui_wnd);
@@ -1282,6 +1305,10 @@ static void ShowTrayMenu(void)
                     APP_NAME L"\nVersion " APP_VERSION L"\n\n"
                     L"Iliz server and your own bot can run together.",
                     APP_NAME, MB_OK | MB_ICONINFORMATION);
+    } else if (cmd == IDM_UPDATE) {
+        UpdateInstall();
+    } else if (cmd == IDM_CHECK_UPD) {
+        UpdateCheckNow();
     } else if (cmd == IDM_EXIT) {
         PostMessageW(g_ui_wnd, WM_CLOSE, 0, 0);
     }
@@ -1295,6 +1322,11 @@ static LRESULT CALLBACK WndProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
             ShowTrayMenu();
         else if (lp == WM_LBUTTONDBLCLK)
             ShowSettings();
+        else if (lp == NIN_BALLOONUSERCLICK && UpdateLatest()[0])
+            UpdateInstall();
+        return 0;
+    case WM_APP_UPDATE:
+        UpdateOnResult(wnd, wp, lp);
         return 0;
     case WM_APP_INFO:
         UpdateTray();
@@ -1306,6 +1338,8 @@ static LRESULT CALLBACK WndProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
         SetTimer(wnd, TIMER_FLASH, FLASH_MS, 0);
         return 0;
     case WM_TIMER:
+        if (UpdateOnTimer(wnd, wp))
+            return 0;
         if (wp == TIMER_FLASH) {
             KillTimer(wnd, TIMER_FLASH);
             g_flash = FALSE;
@@ -1317,6 +1351,7 @@ static LRESULT CALLBACK WndProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_DESTROY:
         KillTimer(wnd, TIMER_FLASH);
+        UpdateStop(wnd);
         BackendStop();
         Shell_NotifyIconW(NIM_DELETE, &g_nid);
         if (g_ui_settings)
@@ -1380,6 +1415,7 @@ int UiRun(BOOL show_settings)
     Shell_NotifyIconW(NIM_ADD, &g_nid);
     UpdateTray();
     BackendStart();
+    UpdateStart(g_ui_wnd);
     if (show_settings)
         ShowSettings();
 

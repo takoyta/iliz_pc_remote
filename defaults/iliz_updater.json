@@ -1,0 +1,21 @@
+{
+  "app_name": "iliz pc remote",
+  "host_exe": "iliz_pc_remote.exe",
+  "version": { "source": "exe" },
+  "source": {
+    "type": "github",
+    "repo": "takoyta/iliz_pc_remote",
+    "asset": "iliz_pc_remote-*.zip",
+    "prerelease": false
+  },
+  "require_hash": true,
+  "preserve": ["config.json", "*.log", "debug.log"],
+  "restart": true,
+  "restart_args": "",
+  "close_host": "graceful",
+  "close_timeout_sec": 15,
+  "check_interval_hours": 24,
+  "work_dir": "update",
+  "language": "auto",
+  "log": true
+}

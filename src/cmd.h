@@ -1,8 +1,10 @@
 #pragma once
 
-#define CMD_OK   0
-#define CMD_NONE 1
-#define CMD_FAIL 2
+#define CMD_OK      0
+#define CMD_NONE    1
+#define CMD_FAIL    2
+#define CMD_CONFIRM 3
+#define CMD_SHOT    4
 
 struct CmdOut {
     int status;

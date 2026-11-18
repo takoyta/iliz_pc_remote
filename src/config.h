@@ -48,6 +48,14 @@ const wchar_t *ConfigSystemTitle(int index);
 int ConfigSystemIndex(const char *value);
 
 int ConfigExecute(const ButtonDef *b, char *err, int errCap, char *reply, int replyCap);
+void ConfigExecMedia(const char *value);
+BOOL ConfigExecKeys(const char *spec);
+int ConfigExecSystem(const char *value);
+#define VOL_READ 0
+#define VOL_SET  1
+#define VOL_STEP 2
+
+BOOL ConfigVolume(int value, int mode, char *reply, int replyCap);
 void ConfigApplyPower(const char *value);
 
 const wchar_t *ConfigActionTitle(const char *action);

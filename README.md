@@ -1,4 +1,4 @@
-# iliz pcrc
+# iliz pc remote
 
 [Русский](README.ru.md)
 
@@ -37,7 +37,7 @@ Buttons are yours. Media, hotkeys, programs, system actions, mouse and typed tex
 - Everything is in the tray menu. No extra control panel to keep open.
 - Start with Windows. The checkbox writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `IlizPcrc`. Nothing else is stored in the registry.
 - Starting the exe again does not open a second copy: it shows Settings of the one already running.
-- Own bot: `/start`, `/keyboard`, and `/help` show your user ID and refresh the keyboard.
+- Own bot: `/start` and `/keyboard` show your user ID and refresh the keyboard. `/help` lists the text commands.
 
 An example layout (media, hotkeys, screenshot, lock, beep) is in [`defaults/config.json`](defaults/config.json). Secrets stay empty. The `config.json` next to your exe is yours — do not publish it.
 
@@ -51,7 +51,7 @@ An example layout (media, hotkeys, screenshot, lock, beep) is in [`defaults/conf
 ## Install
 
 1. Download the zip from this repository's Releases, or build it yourself (below).
-2. Put `iliz_pcrc.exe` in its own folder. The zip already has `config.json`, `bass.dll`, `bassopus.dll`, and `beep.mp3`. A source build copies [`defaults/config.json`](defaults/config.json) to `bin\` on the first run if that file is missing; put the two DLLs next to the exe yourself (`build.bat` does not touch them).
+2. Put `iliz_pc_remote.exe` in its own folder. The zip already has `config.json`, `bass.dll`, `bassopus.dll`, and `beep.mp3`. A source build copies [`defaults/config.json`](defaults/config.json) to `bin\` on the first run if that file is missing; put the two DLLs next to the exe yourself (`build.bat` does not touch them).
 3. Run the exe. It sits in the tray. Settings opens when there is no device token yet.
 
 Right-click the tray icon for the menu: Open Telegram, Open control page (when Iliz is enabled), Settings, Open config.json, About, Exit. Double-click the icon for Settings. That menu is the whole UI.
@@ -64,7 +64,7 @@ Enabled out of the box. Start the exe, wait until the tray icon is online, then 
 
 The client posts `{server}/api/device/bootstrap` and takes the MQTT login from the response. The control page is `{server}/{token}`.
 
-The bot username comes from that response. If the server does not send it, set `telegramBotUsername` in `config.json`.
+The Telegram link is `https://t.me/{username}?start={token}`. The bot username comes from that response and stays in memory until the next start. The page, the link, and the username are not written to the config. The client does not call Telegram `getMe` for this bot: that needs the bot token, which stays on the server.
 
 **New token** rotates the device token. The previous page and deep link no longer match this PC.
 
@@ -123,7 +123,9 @@ The button caption (`label`) is the text the client matches. Two buttons with th
 
 Button names are matched first. If none match, the string runs as a command.
 
-Several calls in one message: separate with `;` or a newline. Spaces do not matter. Parentheses are required, even with no arguments.
+Several calls in one message: separate with `;` or a newline. Spaces do not matter. Parentheses are required, even with no arguments. Command names ignore case.
+
+`/help` in the own bot and in the Iliz bot sends [defaults/command_help.md](defaults/command_help.md) (Telegram Markdown). The developer notes are in [docs/dev/commands.md](docs/dev/commands.md).
 
 Coordinates are screen pixels (can be negative on multi-monitor). Omit them to act at the current cursor position.
 
@@ -137,10 +139,23 @@ Coordinates are screen pixels (can be negative on multi-monitor). Omit them to a
 | `rightClick()` / `rightClick(x, y)` | |
 | `rightDown()` / `rightDown(x, y)` | |
 | `rightUp()` / `rightUp(x, y)` | |
-| `scroll(n)` | wheel notches at the cursor, `1` to `120` up, `-1` to `-120` down |
+| `scroll(3)` | wheel notches at the cursor. Positive is up, negative is down, `-120` to `120` |
 | `type("text")` | types text into the focused window. `\"` `\\` `\n` (Enter) `\t` (Tab) |
+| `run("notepad")` | Win+R: a program name, a path, a document, or a URL. A backslash is a path separator: `run("notepad.exe d:\buttons.json")` |
+| `volume(10)` | set master volume to 10%. `volume(+10)` adds 10 points, `volume(-10)` subtracts. `volume()` replies with the level |
+| `volumeUp()` / `volumeDown()` | one press of the volume key, not a percent |
+| `prev()` `next()` `stop()` | media keys |
+| `pause()` | play/pause key |
+| `mute()` | toggle speaker mute |
+| `keys("alt+f4")` | the same shortcut string as a keys button |
+| `lock()` `sleep()` `signout()` | system actions |
+| `displayOff()` | turn the monitor off |
+| `micMute()` | toggle microphone mute |
+| `beep()` | play the find-PC sound |
+| `shot()` | send a screenshot |
+| `shutdown()` `restart()` | ask `Yes` within 30 seconds |
 
-One argument alone is an error for a click. Zero or a coordinate pair only. `scroll` takes one number. `type` takes one quoted string.
+One argument alone is an error for a click. Zero or a coordinate pair only. `scroll` takes one number. `type` and `run` take one quoted string.
 
 Example drag:
 
@@ -157,6 +172,19 @@ Iliz: the same text in MQTT `type` `cmd`. `ping()` answers `{"ok":true,"result":
 
 Button: action `cmd`, value is the same string. On save the string is checked. The cursor, wheel, and keyboard are not touched.
 
+## Updates
+
+Releases include iliz_updater (a separate project) (`iliz_updater.exe` + `iliz_updater.json`).
+The app checks GitHub Releases about a minute after it starts and then once a day.
+If `iliz_updater.exe` is missing (for example, in a dev build), update checks are turned off.
+
+- Tray menu: **Check for updates** opens the updater window, which shows the installed and new versions and what's new, and lets you install. When an update is found, the menu also gets **Update to X**. A tray notification appears once per version. Click it to update.
+- The updater downloads the release zip, checks its SHA-256 (GitHub asset digest), closes the app, replaces the files, and starts the app again. If something fails, it rolls back. Your `config.json` is kept.
+- `config.json` → `"autoUpdate"`: `"notify"` (default; notification only), `"auto"` (install silently in the background and restart), or `"off"` (no background checks; the menu item still works). `"auto_update"` is accepted too.
+- By hand: run `iliz_updater.exe` from the app folder. The log is in `update\updater.log`.
+
+Release: `pack-release.bat` puts the updater into the zip. Upload the zip (named `iliz_pc_remote-X.Y.Z.zip`) to a GitHub release tagged `X.Y.Z`. `dist\SHA256SUMS` is optional (`NO_SUMS=1` skips it).
+
 ## Build
 
 From the repository root, with VS Build Tools 2022 installed:
@@ -172,15 +200,15 @@ set VSINSTALL=C:\Path\To\BuildTools
 build.bat
 ```
 
-Output: `bin\iliz_pcrc.exe`.
+Output: `bin\iliz_pc_remote.exe`.
 
-Release zip (exe, both DLLs, example `config.json`, and `beep.mp3` when it sits in `bin\`):
+Release zip (exe, both DLLs, example `config.json`, `command_help.md`, and `beep.mp3` when it sits in `bin\`):
 
 ```bat
 pack-release.bat
 ```
 
-Output: `dist\iliz_pcrc-<version>.zip`. The zip uses [`defaults/config.json`](defaults/config.json), not the file next to your running exe.
+Output: `dist\iliz_pc_remote-<version>.zip`. The zip uses [`defaults/config.json`](defaults/config.json) and [`defaults/command_help.md`](defaults/command_help.md), not a `config.json` you edited next to a running exe.
 
 ## License
 

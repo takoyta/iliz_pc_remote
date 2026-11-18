@@ -1,9 +1,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <string.h>
 #include <windows.h>
+#include <mmsystem.h>
 #include <objbase.h>
 #include <wincodec.h>
 #include "shot.h"
+#include "appinfo.h"
 
 HGLOBAL ShotCaptureJpeg(DWORD *outSize)
 {
@@ -43,6 +45,9 @@ HGLOBAL ShotCaptureJpeg(DWORD *outSize)
             DeleteObject(bmp);
         return 0;
     }
+
+    PlaySoundW(MAKEINTRESOURCEW(IDR_CAMERA_WAV), GetModuleHandleW(0),
+               SND_RESOURCE | SND_ASYNC | SND_NODEFAULT);
 
     static const GUID clsidFac = {0xcacaf262, 0x9370, 0x4615, {0xa1, 0x3b, 0x9f, 0x55, 0x39, 0xda, 0x4c, 0x0a}};
     static const GUID iidFac = {0xec5ec8a9, 0xc395, 0x4314, {0x9c, 0x77, 0x54, 0xd7, 0xa9, 0x35, 0xff, 0x70}};

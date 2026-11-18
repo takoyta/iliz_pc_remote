@@ -79,11 +79,13 @@ static BOOL JsonOk(const char *json)
     return ok;
 }
 
-static BOOL SendText(LONGLONG chat, const char *text, BOOL keyboard)
+static BOOL SendText(LONGLONG chat, const char *text, BOOL keyboard, const char *parseMode = 0)
 {
     cJSON *obj = cJSON_CreateObject();
     cJSON_AddNumberToObject(obj, "chat_id", (double)chat);
     cJSON_AddStringToObject(obj, "text", text ? text : "");
+    if (parseMode && parseMode[0])
+        cJSON_AddStringToObject(obj, "parse_mode", parseMode);
     if (keyboard)
         ConfigAddReplyKeyboard(obj);
     char *body = cJSON_PrintUnformatted(obj);
@@ -138,10 +140,111 @@ static BOOL SendShot(LONGLONG chat, HGLOBAL jpeg, DWORD jsize)
     return ok;
 }
 
+static BOOL IsHelp(const char *text)
+{
+    if (!StartsA(text, "/help"))
+        return FALSE;
+    char c = text[5];
+    return c == 0 || c == '@' || c == ' ';
+}
+
+static BOOL ExeFile(wchar_t *out, int cap, const wchar_t *name)
+{
+    out[0] = 0;
+    if (!GetModuleFileNameW(0, out, (DWORD)cap))
+        return FALSE;
+    int n = 0;
+    while (out[n])
+        ++n;
+    while (n > 0 && out[n - 1] != L'\\' && out[n - 1] != L'/')
+        --n;
+    int i = 0;
+    while (name[i] && n < cap - 1)
+        out[n++] = name[i++];
+    out[n] = 0;
+    return name[i] == 0;
+}
+
+/* 0 ok, 1 missing, 2 longer than Telegram allows. Reads command_help.md next to the exe. */
+static int LoadHelp(char *dst, int cap)
+{
+    wchar_t path[MAX_PATH];
+    if (!ExeFile(path, MAX_PATH, L"command_help.md"))
+        return 1;
+    HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if (file == INVALID_HANDLE_VALUE)
+        return 1;
+    DWORD size = GetFileSize(file, 0);
+    if (size == INVALID_FILE_SIZE || size == 0) {
+        CloseHandle(file);
+        return 1;
+    }
+    if (size > 16384) {
+        CloseHandle(file);
+        return 2;
+    }
+    char raw[16384];
+    DWORD got = 0;
+    BOOL ok = ReadFile(file, raw, size, &got, 0);
+    CloseHandle(file);
+    if (!ok || got == 0)
+        return 1;
+    const char *p = raw;
+    int n = (int)got;
+    if (n >= 3 && (unsigned char)p[0] == 0xEF && (unsigned char)p[1] == 0xBB && (unsigned char)p[2] == 0xBF) {
+        p += 3;
+        n -= 3;
+    }
+    int w = 0;
+    for (int i = 0; i < n; ++i) {
+        if (p[i] == '\r')
+            continue;
+        if (w >= cap - 1)
+            return 2;
+        dst[w++] = p[i];
+    }
+    while (w > 0 && (dst[w - 1] == '\n' || dst[w - 1] == ' ' || dst[w - 1] == '\t'))
+        --w;
+    dst[w] = 0;
+    if (w == 0)
+        return 1;
+    if (w > 4096)
+        return 2;
+    return 0;
+}
+
+static void PublishCommands(void)
+{
+    static const char body[] =
+        "{\"commands\":["
+        "{\"command\":\"start\",\"description\":\"Show your user ID\"},"
+        "{\"command\":\"keyboard\",\"description\":\"Refresh the keyboard\"},"
+        "{\"command\":\"help\",\"description\":\"List text commands\"}"
+        "]}";
+    wchar_t url[2048];
+    BotUrl(url, 2048, "setMyCommands");
+    int n = 0;
+    HttpExchange(&g_http, url, body, 15000, g_body, BODY_MAX, &n);
+}
+
 static void HandleText(LONGLONG chat, LONGLONG from, const char *text)
 {
     BOOL allowed = IsAllowed(from);
-    if (EqA(text, "/start") || EqA(text, "/keyboard") || EqA(text, "/help")) {
+    if (IsHelp(text)) {
+        AppFlash();
+        char help[4097];
+        int loaded = LoadHelp(help, (int)sizeof(help));
+        if (loaded == 0) {
+            if (!SendText(chat, help, allowed, "Markdown"))
+                SendText(chat, "Can't send help. Check command_help.md.", FALSE);
+        } else if (loaded == 2) {
+            SendText(chat, "Help file is too long.", allowed);
+        } else {
+            SendText(chat, "Help file is missing.", allowed);
+        }
+        return;
+    }
+    if (EqA(text, "/start") || EqA(text, "/keyboard")) {
         AppFlash();
         char msg[96];
         char id[32];
@@ -174,17 +277,10 @@ static void HandleText(LONGLONG chat, LONGLONG from, const char *text)
     CoreButton(text, chat, &out);
     if (out.kind == CORE_UNKNOWN) {
         CoreFree(&out);
-        CmdOut cmd;
-        CmdRun(text, &cmd);
-        if (cmd.status == CMD_NONE)
-            return;
-        AppFlash();
-        if (cmd.status != CMD_OK)
-            SendText(chat, cmd.error[0] ? cmd.error : "Command failed.", FALSE);
-        else if (cmd.reply[0])
-            SendText(chat, cmd.reply, FALSE);
-        return;
+        CoreCommand(text, chat, &out);
     }
+    if (out.kind == CORE_UNKNOWN)
+        return;
     if (out.kind == CORE_OK) {
         AppFlash();
         if (out.detail[0])
@@ -380,6 +476,9 @@ static DWORD WINAPI BotThread(void *param)
     }
     BotUrl(url, 2048, "deleteWebhook");
     HttpExchange(&g_http, url, 0, 15000, g_body, BODY_MAX, &n);
+    if (InterlockedCompareExchange(&g_gen, gen, gen) != gen)
+        return 0;
+    PublishCommands();
     if (InterlockedCompareExchange(&g_gen, gen, gen) != gen)
         return 0;
     AppSetOwnStatus("Online", TRUE);

@@ -98,11 +98,19 @@ static void ApplyConfigText(const char *buf)
     TakeBool(root, "ownEnabled", &g_set.own_on);
     TakeW(root, "token", g_set.token, SET_TOKEN_MAX);
     TakeW(root, "server", g_set.server, SET_HOST_MAX);
-    TakeW(root, "controlPage", g_set.control_page, SET_URL_MAX);
-    TakeW(root, "telegramBotUsername", g_set.tg_user, SET_TG_USER);
-    TakeW(root, "telegramDeepLink", g_set.tg_link, SET_TG_LINK);
     TakeW(root, "botToken", g_set.bot_token, SET_BOT_MAX);
     TakeW(root, "allowedIds", g_set.allowed, SET_ALLOW_MAX);
+    cJSON *au = cJSON_GetObjectItemCaseSensitive(root, "autoUpdate");
+    if (!cJSON_IsString(au))
+        au = cJSON_GetObjectItemCaseSensitive(root, "auto_update");
+    if (cJSON_IsString(au) && au->valuestring) {
+        if (EqA(au->valuestring, "off"))
+            g_set.auto_update = 0;
+        else if (EqA(au->valuestring, "auto"))
+            g_set.auto_update = 2;
+        else
+            g_set.auto_update = 1;
+    }
     cJSON_Delete(root);
 }
 
@@ -110,6 +118,7 @@ void SettingsLoad(void)
 {
     memset(&g_set, 0, sizeof(g_set));
     g_set.iliz_on = TRUE;
+    g_set.auto_update = 1;
 
     wchar_t path[MAX_PATH];
     ExeDirFile(path, MAX_PATH, L"config.json");
@@ -138,11 +147,9 @@ BOOL SettingsSave(void)
     cJSON_AddBoolToObject(root, "ownEnabled", g_set.own_on);
     AddW(root, "token", g_set.token);
     AddW(root, "server", g_set.server);
-    AddW(root, "controlPage", g_set.control_page);
-    AddW(root, "telegramBotUsername", g_set.tg_user);
-    AddW(root, "telegramDeepLink", g_set.tg_link);
     AddW(root, "botToken", g_set.bot_token);
     AddW(root, "allowedIds", g_set.allowed);
+    cJSON_AddStringToObject(root, "autoUpdate", g_set.auto_update == 0 ? "off" : (g_set.auto_update == 2 ? "auto" : "notify"));
     ConfigAppendButtons(root);
     char *body = cJSON_Print(root);
     cJSON_Delete(root);
@@ -253,14 +260,9 @@ void SettingsSetAutostart(BOOL on)
     RegCloseKey(key);
 }
 
-void SettingsBuildPage(const wchar_t *server, const wchar_t *token, const wchar_t *control,
-                       wchar_t *out, int cap)
+void SettingsBuildPage(const wchar_t *server, const wchar_t *token, wchar_t *out, int cap)
 {
     out[0] = 0;
-    if (control && control[0]) {
-        CopyW(out, control, cap);
-        return;
-    }
     if (server && server[0]) {
         CopyW(out, server, cap);
         AppendW(out, cap, L"/");

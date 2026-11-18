@@ -116,7 +116,7 @@ static WORD MapKeyName(const char *name)
     return 0;
 }
 
-static void ExecuteKeys(const char *spec)
+static BOOL ExecuteKeys(const char *spec)
 {
     WORD keys[8];
     int n = 0;
@@ -142,7 +142,7 @@ static void ExecuteKeys(const char *spec)
             part[pi++] = c;
     }
     if (!n)
-        return;
+        return FALSE;
 
     INPUT in[16];
     memset(in, 0, sizeof(in));
@@ -163,6 +163,7 @@ static void ExecuteKeys(const char *spec)
         ++m;
     }
     SendInput((UINT)m, in, sizeof(INPUT));
+    return TRUE;
 }
 
 static void ExecuteMedia(const char *value)
@@ -236,34 +237,60 @@ int ConfigSystemIndex(const char *value)
     return -1;
 }
 
+struct Endpoint {
+    IMMDeviceEnumerator *en;
+    IMMDevice *dev;
+    IAudioEndpointVolume *vol;
+    BOOL uninit;
+};
+
+static const GUID kClsidEnum = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
+static const GUID kIidEnum = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
+static const GUID kIidVol = {0x5CDF2C82, 0x841E, 0x4546, {0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A}};
+
+static void EndpointClose(Endpoint *ep)
+{
+    if (ep->vol)
+        ep->vol->Release();
+    if (ep->dev)
+        ep->dev->Release();
+    if (ep->en)
+        ep->en->Release();
+    if (ep->uninit)
+        CoUninitialize();
+    ep->vol = 0;
+    ep->dev = 0;
+    ep->en = 0;
+    ep->uninit = FALSE;
+}
+
+static BOOL EndpointOpen(EDataFlow flow, Endpoint *ep)
+{
+    HRESULT hr;
+    memset(ep, 0, sizeof(*ep));
+    hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED);
+    ep->uninit = (hr == S_OK || hr == S_FALSE);
+    hr = CoCreateInstance(kClsidEnum, 0, CLSCTX_ALL, kIidEnum, (void **)&ep->en);
+    if (FAILED(hr) || !ep->en)
+        return FALSE;
+    hr = ep->en->GetDefaultAudioEndpoint(flow, eConsole, &ep->dev);
+    if (FAILED(hr) || !ep->dev)
+        return FALSE;
+    hr = ep->dev->Activate(kIidVol, CLSCTX_ALL, 0, (void **)&ep->vol);
+    return SUCCEEDED(hr) && ep->vol;
+}
+
 static void ToggleMic()
 {
-    static const GUID clsidEnum = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
-    static const GUID iidEnum = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
-    static const GUID iidVol = {0x5CDF2C82, 0x841E, 0x4546, {0x97, 0x22, 0x0C, 0xF7, 0x40, 0x78, 0x22, 0x9A}};
-
-    HRESULT hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED);
-    BOOL uninit = (hr == S_OK || hr == S_FALSE);
-    IMMDeviceEnumerator *en = 0;
-    IMMDevice *dev = 0;
-    IAudioEndpointVolume *vol = 0;
-    hr = CoCreateInstance(clsidEnum, 0, CLSCTX_ALL, iidEnum, (void **)&en);
-    if (SUCCEEDED(hr) && en) {
-        hr = en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev);
-        if (SUCCEEDED(hr) && dev) {
-            hr = dev->Activate(iidVol, CLSCTX_ALL, 0, (void **)&vol);
-            if (SUCCEEDED(hr) && vol) {
-                BOOL muted = FALSE;
-                if (SUCCEEDED(vol->GetMute(&muted)))
-                    vol->SetMute(muted ? FALSE : TRUE, 0);
-            }
-        }
+    Endpoint ep;
+    BOOL muted = FALSE;
+    if (!EndpointOpen(eCapture, &ep)) {
+        EndpointClose(&ep);
+        return;
     }
-    if (vol) vol->Release();
-    if (dev) dev->Release();
-    if (en) en->Release();
-    if (uninit)
-        CoUninitialize();
+    if (SUCCEEDED(ep.vol->GetMute(&muted)))
+        ep.vol->SetMute(muted ? FALSE : TRUE, 0);
+    EndpointClose(&ep);
 }
 
 static void FindPc()
@@ -338,6 +365,86 @@ static int ExecuteSystem(const char *value)
     return CFG_EXEC_OK;
 }
 
+void ConfigExecMedia(const char *value)
+{
+    ExecuteMedia(value ? value : "");
+}
+
+BOOL ConfigExecKeys(const char *spec)
+{
+    if (!spec || !spec[0])
+        return FALSE;
+    return ExecuteKeys(spec);
+}
+
+int ConfigExecSystem(const char *value)
+{
+    return ExecuteSystem(value ? value : "");
+}
+
+static void PutPct(char *dst, int cap, int pct)
+{
+    char tmp[8];
+    int i = 0;
+    int v = pct;
+    if (cap < 3) {
+        if (cap > 0)
+            dst[0] = 0;
+        return;
+    }
+    if (v < 0)
+        v = 0;
+    if (v > 100)
+        v = 100;
+    if (v == 0) {
+        CopyA(dst, "0%", cap);
+        return;
+    }
+    while (v > 0 && i < 7) {
+        tmp[i++] = (char)('0' + (v % 10));
+        v /= 10;
+    }
+    int n = 0;
+    while (i > 0)
+        dst[n++] = tmp[--i];
+    dst[n++] = '%';
+    dst[n] = 0;
+}
+
+BOOL ConfigVolume(int value, int mode, char *reply, int replyCap)
+{
+    Endpoint ep;
+    float level = 0;
+    BOOL ok = FALSE;
+    if (!EndpointOpen(eRender, &ep)) {
+        EndpointClose(&ep);
+        return FALSE;
+    }
+    if (SUCCEEDED(ep.vol->GetMasterVolumeLevelScalar(&level))) {
+        if (mode == VOL_READ) {
+            ok = TRUE;
+        } else {
+            float next = (mode == VOL_SET) ? ((float)value / 100.0f) : (level + ((float)value / 100.0f));
+            if (next < 0)
+                next = 0;
+            if (next > 1)
+                next = 1;
+            if (SUCCEEDED(ep.vol->SetMasterVolumeLevelScalar(next, 0))) {
+                if (next > 0)
+                    ep.vol->SetMute(FALSE, 0);
+                level = next;
+                ok = TRUE;
+            }
+        }
+        if (ok && reply && replyCap > 0) {
+            int pct = (int)(level * 100.0f + 0.5f);
+            PutPct(reply, replyCap, pct);
+        }
+    }
+    EndpointClose(&ep);
+    return ok;
+}
+
 int ConfigExecute(const ButtonDef *b, char *err, int errCap, char *reply, int replyCap)
 {
     if (err && errCap > 0)
@@ -352,18 +459,29 @@ int ConfigExecute(const ButtonDef *b, char *err, int errCap, char *reply, int re
         ExecuteKeys(b->value);
     else if (EqA(b->action, "run"))
         ExecuteRun(b->value);
-    else if (EqA(b->action, "system"))
-        return ExecuteSystem(b->value);
-    else if (EqA(b->action, "cmd")) {
+    else if (EqA(b->action, "system")) {
+        int kind = ExecuteSystem(b->value);
+        if (kind == CFG_EXEC_CONFIRM && reply && replyCap > 0)
+            CopyA(reply, b->value, replyCap);
+        return kind;
+    } else if (EqA(b->action, "cmd")) {
         CmdOut cmd;
         CmdRun(b->value, &cmd);
-        if (cmd.status != CMD_OK) {
-            if (err && errCap > 0)
-                CopyA(err, cmd.error[0] ? cmd.error : "bad command", errCap);
-            return CFG_EXEC_FAIL;
+        if (cmd.status == CMD_CONFIRM) {
+            if (reply && replyCap > 0)
+                CopyA(reply, cmd.reply, replyCap);
+            return CFG_EXEC_CONFIRM;
         }
-        if (reply && replyCap > 0 && cmd.reply[0])
-            CopyA(reply, cmd.reply, replyCap);
+        if (cmd.status == CMD_SHOT)
+            return CFG_EXEC_SHOT;
+        if (cmd.status == CMD_OK) {
+            if (reply && replyCap > 0 && cmd.reply[0])
+                CopyA(reply, cmd.reply, replyCap);
+            return CFG_EXEC_OK;
+        }
+        if (err && errCap > 0)
+            CopyA(err, cmd.error[0] ? cmd.error : "bad command", errCap);
+        return CFG_EXEC_FAIL;
     }
     return CFG_EXEC_OK;
 }

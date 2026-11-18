@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <string.h>
 #include <windows.h>
+#include "cmd.h"
 #include "config.h"
 #include "core.h"
 #include "shot.h"
@@ -31,6 +32,38 @@ void CoreFree(CoreOut *out)
     }
 }
 
+static void FinishExec(int kind, const char *confirmValue, const char *err, const char *reply, LONGLONG chat, CoreOut *out)
+{
+    if (kind == CFG_EXEC_FAIL) {
+        out->kind = CORE_FAIL;
+        CopyA(out->detail, err && err[0] ? err : "command failed", sizeof(out->detail));
+        return;
+    }
+    if (kind == CFG_EXEC_CONFIRM) {
+        const char *what = confirmValue && confirmValue[0] ? confirmValue : "";
+        CopyA(g_val, what, sizeof(g_val));
+        g_chat = chat;
+        g_until = GetTickCount64() + 30000;
+        out->kind = CORE_CONFIRM;
+        CopyA(out->detail, what, sizeof(out->detail));
+        return;
+    }
+    if (kind == CFG_EXEC_SHOT) {
+        out->jpeg = ShotCaptureJpeg(&out->jpeg_len);
+        if (!out->jpeg || !out->jpeg_len) {
+            CoreFree(out);
+            out->kind = CORE_FAIL;
+            CopyA(out->detail, "shot failed", sizeof(out->detail));
+            return;
+        }
+        out->kind = CORE_SHOT;
+        return;
+    }
+    out->kind = CORE_OK;
+    if (reply && reply[0])
+        CopyA(out->detail, reply, sizeof(out->detail));
+}
+
 void CoreButton(const char *label, LONGLONG chat, CoreOut *out)
 {
     ClearOut(out);
@@ -48,33 +81,36 @@ void CoreButton(const char *label, LONGLONG chat, CoreOut *out)
     char err[64];
     char reply[64];
     int kind = ConfigExecute(&btn, err, sizeof(err), reply, sizeof(reply));
-    if (kind == CFG_EXEC_FAIL) {
-        out->kind = CORE_FAIL;
-        CopyA(out->detail, err[0] ? err : "command failed", sizeof(out->detail));
+    const char *confirm = reply[0] ? reply : btn.value;
+    FinishExec(kind, confirm, err, reply, chat, out);
+}
+
+void CoreCommand(const char *text, LONGLONG chat, CoreOut *out)
+{
+    ClearOut(out);
+    CoreReset();
+    CmdOut cmd;
+    int kind = CFG_EXEC_OK;
+    const char *confirm = "";
+    const char *err = "";
+    const char *reply = "";
+    CmdRun(text, &cmd);
+    if (cmd.status == CMD_NONE) {
+        out->kind = CORE_UNKNOWN;
         return;
     }
-    if (kind == CFG_EXEC_CONFIRM) {
-        CopyA(g_val, btn.value, sizeof(g_val));
-        g_chat = chat;
-        g_until = GetTickCount64() + 30000;
-        out->kind = CORE_CONFIRM;
-        CopyA(out->detail, btn.value, sizeof(out->detail));
-        return;
+    if (cmd.status == CMD_FAIL) {
+        kind = CFG_EXEC_FAIL;
+        err = cmd.error;
+    } else if (cmd.status == CMD_CONFIRM) {
+        kind = CFG_EXEC_CONFIRM;
+        confirm = cmd.reply;
+    } else if (cmd.status == CMD_SHOT) {
+        kind = CFG_EXEC_SHOT;
+    } else {
+        reply = cmd.reply;
     }
-    if (kind == CFG_EXEC_SHOT) {
-        out->jpeg = ShotCaptureJpeg(&out->jpeg_len);
-        if (!out->jpeg || !out->jpeg_len) {
-            CoreFree(out);
-            out->kind = CORE_FAIL;
-            CopyA(out->detail, "shot failed", sizeof(out->detail));
-            return;
-        }
-        out->kind = CORE_SHOT;
-        return;
-    }
-    out->kind = CORE_OK;
-    if (reply[0])
-        CopyA(out->detail, reply, sizeof(out->detail));
+    FinishExec(kind, confirm, err, reply, chat, out);
 }
 
 void CoreAnswer(LONGLONG chat, BOOL yes, CoreOut *out)

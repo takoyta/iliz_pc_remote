@@ -19,11 +19,10 @@ struct AppSettings {
     wchar_t user[SET_USER_MAX];
     wchar_t pass[SET_USER_MAX];
     int port;
-    wchar_t control_page[SET_URL_MAX];
     wchar_t tg_user[SET_TG_USER];
-    wchar_t tg_link[SET_TG_LINK];
     wchar_t bot_token[SET_BOT_MAX];
     wchar_t allowed[SET_ALLOW_MAX];
+    int auto_update;   // 0 off, 1 notify, 2 auto (see update.h)
 };
 
 void SettingsLoad(void);
@@ -37,6 +36,5 @@ BOOL SettingsValidToken(const wchar_t *s);
 BOOL SettingsAutostart(void);
 void SettingsSetAutostart(BOOL on);
 
-void SettingsBuildPage(const wchar_t *server, const wchar_t *token, const wchar_t *control,
-                       wchar_t *out, int cap);
+void SettingsBuildPage(const wchar_t *server, const wchar_t *token, wchar_t *out, int cap);
 void SettingsNormalizeAllowed(wchar_t *s);

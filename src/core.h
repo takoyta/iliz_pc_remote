@@ -17,5 +17,6 @@ struct CoreOut {
 
 void CoreReset(void);
 void CoreButton(const char *label, LONGLONG chat, CoreOut *out);
+void CoreCommand(const char *text, LONGLONG chat, CoreOut *out);
 void CoreAnswer(LONGLONG chat, BOOL yes, CoreOut *out);
 void CoreFree(CoreOut *out);

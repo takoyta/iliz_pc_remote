@@ -193,17 +193,13 @@ static BOOL Bootstrap(void)
     const char *host_s = JStr(mqtt, "host");
     const char *user_s = JStr(mqtt, "user");
     const char *pass_s = JStr(mqtt, "pass");
-    const char *page_s = JStr(ctrl, "page");
     int port_v = 1883;
     cJSON *port = cJSON_GetObjectItemCaseSensitive(mqtt, "port");
     if (cJSON_IsNumber(port))
         port_v = (int)port->valuedouble;
     const char *tg_user = JStr(root, "telegram_bot_username");
-    const char *tg_link = JStr(root, "telegram_deep_link");
     if (!tg_user[0])
         tg_user = JStr(ctrl, "telegram_bot_username");
-    if (!tg_link[0])
-        tg_link = JStr(ctrl, "telegram_deep_link");
 
     if (!host_s[0] || !user_s[0] || !pass_s[0] || port_v < 1 || port_v > 65535) {
         DebugLog("bootstrap", "fail missing mqtt fields");
@@ -214,25 +210,13 @@ static BOOL Bootstrap(void)
     Utf8ToWide(user_s, s->user, SET_USER_MAX);
     Utf8ToWide(pass_s, s->pass, SET_USER_MAX);
     s->port = port_v;
-    if (page_s[0])
-        Utf8ToWide(page_s, s->control_page, SET_URL_MAX);
     if (tg_user[0]) {
         const char *u = tg_user[0] == '@' ? tg_user + 1 : tg_user;
         Utf8ToWide(u, s->tg_user, SET_TG_USER);
     }
-    if (tg_link[0])
-        Utf8ToWide(tg_link, s->tg_link, SET_TG_LINK);
 
-    char page_host[256];
-    page_host[0] = 0;
-    if (s->control_page[0]) {
-        char red[512];
-        DebugRedactUrlW(s->control_page, red, sizeof(red));
-        HostOnlyFromUrlA(red, page_host, sizeof(page_host));
-    }
-    DebugLog("bootstrap", "ok mqtt=%s:%d user=%s control_host=%s tg_user=%s",
+    DebugLog("bootstrap", "ok mqtt=%s:%d user=%s tg_user=%s",
              host_s, port_v, user_s,
-             page_host[0] ? page_host : "-",
              tg_user[0] ? "yes" : "no");
 
     cJSON_Delete(root);
@@ -423,16 +407,13 @@ static void OnCommand(const char *json, int len)
             EvtError(id, "bad command");
             return;
         }
-        CmdOut cmd;
-        CmdRun(text, &cmd);
-        if (cmd.status == CMD_OK) {
-            if (cmd.reply[0])
-                EvtResult(id, cmd.reply);
-            else
-                Evt(id, TRUE);
+        CoreOut out;
+        CoreCommand(text, 0, &out);
+        if (out.kind == CORE_UNKNOWN) {
+            EvtError(id, "bad command");
             return;
         }
-        EvtError(id, cmd.error[0] ? cmd.error : "bad command");
+        Finish(id, &out);
         return;
     }
 
@@ -511,6 +492,7 @@ void IlizStart(void)
     s->user[0] = 0;
     s->pass[0] = 0;
     s->port = 0;
+    s->tg_user[0] = 0;
     DebugLog("iliz", "start");
     if (!s->server[0] || !SettingsValidToken(s->token)) {
         DebugLog("iliz", "missing server or token");
@@ -551,7 +533,7 @@ void IlizOpenPage(HWND owner)
 {
     const AppSettings *s = Settings();
     wchar_t page[SET_URL_MAX];
-    SettingsBuildPage(s->server, s->token, s->control_page, page, SET_URL_MAX);
+    SettingsBuildPage(s->server, s->token, page, SET_URL_MAX);
     if (!page[0] || page[0] == L'/' || !SettingsValidToken(s->token)) {
         MessageBoxW(owner, L"No control page yet. Set the server in Settings and reconnect.",
                     APP_NAME, MB_OK | MB_ICONWARNING);
@@ -565,9 +547,7 @@ void IlizOpenTelegram(HWND owner)
     const AppSettings *s = Settings();
     wchar_t link[SET_TG_LINK];
     link[0] = 0;
-    if (s->tg_link[0]) {
-        CopyW(link, s->tg_link, SET_TG_LINK);
-    } else if (s->tg_user[0] && SettingsValidToken(s->token)) {
+    if (s->tg_user[0] && SettingsValidToken(s->token)) {
         char uname[SET_TG_USER];
         char token[SET_TOKEN_MAX];
         char raw[SET_TG_LINK];
@@ -583,8 +563,8 @@ void IlizOpenTelegram(HWND owner)
     }
     if (!link[0]) {
         MessageBoxW(owner,
-                    L"Telegram bot is not configured yet.\n"
-                    L"Set the Telegram bot username in Settings, or wait until bootstrap returns it.",
+                    L"Telegram bot is not ready yet.\n"
+                    L"Wait until the tray icon is online.",
                     APP_NAME, MB_OK | MB_ICONWARNING);
         return;
     }
