@@ -7,6 +7,8 @@ call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 if not exist "%ROOT%bin" mkdir "%ROOT%bin"
 if not exist "%ROOT%bin\config.json" copy /y "%ROOT%defaults\config.json" "%ROOT%bin\config.json" >nul
 copy /y "%ROOT%defaults\command_help.md" "%ROOT%bin\command_help.md" >nul
+copy /y "%ROOT%defaults\beep.mp3" "%ROOT%bin\beep.mp3" >nul || exit /b 1
+copy /y "%ROOT%defaults\camera.mp3" "%ROOT%bin\camera.mp3" >nul || exit /b 1
 rem Stop a running copy so the linker can overwrite the exe
 taskkill /im iliz_pc_remote.exe /f >nul 2>&1 && timeout /t 1 /nobreak >nul
 cd /d "%ROOT%bin"
@@ -25,7 +27,7 @@ cl /nologo /std:c++17 /MT /O1 /Os /GS- /Gy /GR- /EHs-c- /W3 /DUNICODE /D_UNICODE
    /link /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /MANIFEST:NO ^
    kernel32.lib user32.lib gdi32.lib advapi32.lib shell32.lib comctl32.lib ole32.lib ^
    dwmapi.lib uxtheme.lib ^
-   powrprof.lib ws2_32.lib winhttp.lib crypt32.lib winmm.lib || exit /b 1
+   powrprof.lib ws2_32.lib winhttp.lib crypt32.lib || exit /b 1
 
 del /q *.obj *.res *.lib *.exp 2>nul
 echo Built: %ROOT%bin\iliz_pc_remote.exe

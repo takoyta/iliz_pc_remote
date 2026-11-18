@@ -60,7 +60,8 @@ copy /y "%ROOT%bin\bass.dll" "%STAGE%\" >nul
 copy /y "%ROOT%bin\bassopus.dll" "%STAGE%\" >nul
 copy /y "%ROOT%defaults\config.json" "%STAGE%\config.json" >nul
 copy /y "%ROOT%defaults\command_help.md" "%STAGE%\command_help.md" >nul
-if exist "%ROOT%bin\beep.mp3" copy /y "%ROOT%bin\beep.mp3" "%STAGE%\" >nul
+copy /y "%ROOT%bin\beep.mp3" "%STAGE%\" >nul || exit /b 1
+copy /y "%ROOT%bin\camera.mp3" "%STAGE%\" >nul || exit /b 1
 copy /y "%UPDATER_EXE%" "%STAGE%\iliz_updater.exe" >nul || exit /b 1
 copy /y "%ROOT%defaults\iliz_updater.json" "%STAGE%\iliz_updater.json" >nul || exit /b 1
 

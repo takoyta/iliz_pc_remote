@@ -51,7 +51,7 @@
 ## Установка
 
 1. Скачайте zip из Releases этого репозитория или соберите сами (см. ниже).
-2. Положите `iliz_pc_remote.exe` в свою папку. В zip уже есть `config.json`, `bass.dll`, `bassopus.dll` и `beep.mp3`. При сборке из исходников [`defaults/config.json`](defaults/config.json) копируется в `bin\`, если файла ещё нет; две DLL положите рядом с exe сами (`build.bat` их не трогает).
+2. Положите `iliz_pc_remote.exe` в свою папку. В zip уже есть `config.json`, `bass.dll`, `bassopus.dll`, `beep.mp3` и `camera.mp3`. При сборке из исходников [`defaults/config.json`](defaults/config.json) копируется в `bin\`, если файла ещё нет, а оба звука копируются при каждой сборке; две DLL положите рядом с exe сами (`build.bat` их не трогает).
 3. Запустите exe. Он сядет в трей. Settings откроется, если токена устройства ещё нет.
 
 Правый щелчок по иконке в трее — меню: Open Telegram, Open control page (когда Iliz включён), Settings, Open config.json, About, Exit. Двойной щелчок — Settings. Это и есть весь интерфейс.
@@ -202,7 +202,7 @@ build.bat
 
 Результат: `bin\iliz_pc_remote.exe`.
 
-Zip релиза (exe, обе DLL, пример `config.json`, `command_help.md` и `beep.mp3`, если он лежит в `bin\`):
+Zip релиза (exe, обе DLL, пример `config.json`, `command_help.md` и оба звука MP3):
 
 ```bat
 pack-release.bat

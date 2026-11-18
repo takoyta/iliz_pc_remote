@@ -51,7 +51,7 @@ An example layout (media, hotkeys, screenshot, lock, beep) is in [`defaults/conf
 ## Install
 
 1. Download the zip from this repository's Releases, or build it yourself (below).
-2. Put `iliz_pc_remote.exe` in its own folder. The zip already has `config.json`, `bass.dll`, `bassopus.dll`, and `beep.mp3`. A source build copies [`defaults/config.json`](defaults/config.json) to `bin\` on the first run if that file is missing; put the two DLLs next to the exe yourself (`build.bat` does not touch them).
+2. Put `iliz_pc_remote.exe` in its own folder. The zip already has `config.json`, `bass.dll`, `bassopus.dll`, `beep.mp3`, and `camera.mp3`. A source build copies [`defaults/config.json`](defaults/config.json) to `bin\` on the first run if that file is missing, and copies both sounds there; put the two DLLs next to the exe yourself (`build.bat` does not touch them).
 3. Run the exe. It sits in the tray. Settings opens when there is no device token yet.
 
 Right-click the tray icon for the menu: Open Telegram, Open control page (when Iliz is enabled), Settings, Open config.json, About, Exit. Double-click the icon for Settings. That menu is the whole UI.
@@ -202,7 +202,7 @@ build.bat
 
 Output: `bin\iliz_pc_remote.exe`.
 
-Release zip (exe, both DLLs, example `config.json`, `command_help.md`, and `beep.mp3` when it sits in `bin\`):
+Release zip (exe, both DLLs, example `config.json`, `command_help.md`, and both MP3 sounds):
 
 ```bat
 pack-release.bat

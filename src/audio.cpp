@@ -118,9 +118,22 @@ void AudioShutdown()
 BOOL AudioPlaySibling(const wchar_t *name)
 {
     wchar_t path[MAX_PATH];
-    if (!name || !name[0] || !ExeSibling(path, MAX_PATH, name))
+    if (!name || !name[0] || !ExeSibling(path, MAX_PATH, name) || !EnsureBass())
         return FALSE;
-    return AudioPlayFile(path);
+    if (!g_inited) {
+        if (!g_init(-1, 44100, 0, 0, 0))
+            return FALSE;
+        g_inited = TRUE;
+    }
+    // Unicode path; automatically release the stream when playback finishes.
+    DWORD handle = g_stream(0, path, 0, 0, 0x80040000);
+    if (!handle)
+        return FALSE;
+    if (!g_play(handle, FALSE)) {
+        g_stream_free(handle);
+        return FALSE;
+    }
+    return TRUE;
 }
 
 BOOL AudioPlayFile(const wchar_t *path)

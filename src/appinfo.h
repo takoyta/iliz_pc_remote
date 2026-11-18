@@ -2,13 +2,12 @@
 
 #define APP_VER_MAJOR 0
 #define APP_VER_MINOR 1
-#define APP_VER_PATCH 9
+#define APP_VER_PATCH 10
 
-#define APP_VERSION_A   "0.1.9"
+#define APP_VERSION_A   "0.1.10"
 #define IDI_APP         1
 #define IDI_APP_OFF     2
 #define IDI_APP_MSG     3
-#define IDR_CAMERA_WAV  101
 #define APP_NAME_A      "iliz pc remote"
 #define APP_COMPANY_A   "iliz"
 #define APP_DESC_A      "Remote control for this PC"
